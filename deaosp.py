@@ -1,0 +1,83 @@
+import sys
+import os
+
+
+def repo(label):
+    return {
+        f'{label}/': '//',
+        f'{label}:': '//:',
+    }
+
+
+REPLACEMENTS = {
+    # remap aosp relative labels
+    **repo('//tools/adt/idea/aswb'),
+    **repo('//tools/vendor/google/aswb'),
+    **repo('//tools/vendor/google3/aswb'),
+    **repo('//third_party/intellij/bazel/plugin'),
+    **repo('//third_party/intellij/plugin'),
+    '//third_party/java/auto_value': '//third_party/auto_value',
+    '//third_party/java/auto:auto_value': '//third_party/auto_value',
+    '//third_party/java/jetbrains:build_defs.bzl': '//intellij_platform_sdk:build_defs.bzl',
+    '//third_party/java/junit': '@junit//jar',
+    '//third_party/java/truth': '@truth//jar',
+    '//third_party/java/flogger': '@flogger//jar',
+    '//third_party/java/jetbrains/python': '//third_party/python',
+    '//prebuilts/tools/common/m2:jsr305-2.0.1': '@jsr305_annotations//jar',
+
+    # remap plugin api
+    '//plugin_api:guava_for_external_binaries': '//intellij_platform_sdk:guava',
+    '//plugin_api:jsr305': '//intellij_platform_sdk:jsr305',
+    '//plugin_api:test_libs': '//intellij_platform_sdk:test_libs',
+    '//plugin_api:plugin_api_for_tests': '//intellij_platform_sdk:plugin_api_for_tests',
+    '//plugin_api:coverage_for_tests': '//intellij_platform_sdk:coverage_for_tests',
+    '//plugin_api:truth': '//intellij_platform_sdk:truth',
+    '//plugin_api:juint': '//intellij_platform_sdk:juint',
+    '//plugin_api:kotlin_for_tests': '//intellij_platform_sdk:kotlin_for_tests',
+    '//plugin_api:kotlin': '//intellij_platform_sdk:kotlin',
+    '//plugin_api:terminal': '//intellij_platform_sdk:terminal',
+    '//plugin_api': '//intellij_platform_sdk:plugin_api',
+
+    # remap to old maven import style
+    '@maven//:com.google.guava.guava': '@com_google_guava_guava//jar',
+    '@maven//:io.grpc.grpc-protobuf-lite': '@protobuf//:protobuf_java',
+    '@maven//:io.grpc.grpc-protobuf': '@protobuf//:protobuf_java',
+    '@maven//:org.mockito.mockito-core': '@mockito//jar',
+    '@maven//:com.google.code.gson.gson': '@gson//jar',
+
+    # remap to rules android
+    '//:android.bzl': '@rules_android//rules:rules.bzl',
+
+    # remap aosp paths
+    'tools/adt/idea/aswb/': '',
+
+    # other fixes
+    '@com_google_protobuf//:protobuf_java': '@protobuf//:protobuf_java',
+}
+
+
+def process(text):
+    for src, dst in REPLACEMENTS.items():
+        text = text.replace(src, dst)
+
+    return text
+
+
+def walk(path):
+    for dir, _, files in os.walk(path):
+        for name in files:
+            file = os.path.join(dir, name)
+
+            with open(file, 'r') as f:
+                text = f.read()
+
+            text = process(text)
+
+            with open(file, 'w') as f:
+                f.write(text)
+
+
+if __name__ == '__main__':
+    path = sys.argv[1]
+
+    walk(path)
