@@ -9,6 +9,13 @@ def repo(label):
     }
 
 
+def path(value):
+    return {
+        f'{value}/': '',
+        f'{value}': '',
+    }
+
+
 REPLACEMENTS = {
     # remap aosp relative labels
     **repo('//tools/adt/idea/aswb'),
@@ -49,14 +56,19 @@ REPLACEMENTS = {
     '//:android.bzl': '@rules_android//rules:rules.bzl',
 
     # remap aosp paths
-    'tools/adt/idea/aswb/': '',
+    **path('tools/adt/idea/aswb'),
+    **path('tools/vendor/google3/aswb/third_party/intellij/bazel/plugin'),
 
     # other fixes
     '@com_google_protobuf//:protobuf_java': '@protobuf//:protobuf_java',
 }
 
 
-def process(text):
+def process(text: str) -> str:
+    """
+    Processes one text line. Applies all defined replacements.
+    """
+
     for src, dst in REPLACEMENTS.items():
         text = text.replace(src, dst)
 
@@ -64,6 +76,10 @@ def process(text):
 
 
 def walk(path):
+    """
+    Walks a directory and processes every file in the directory.
+    """
+
     for dir, _, files in os.walk(path):
         for name in files:
             file = os.path.join(dir, name)
@@ -79,5 +95,5 @@ def walk(path):
 
 if __name__ == '__main__':
     path = sys.argv[1]
-
     walk(path)
+
