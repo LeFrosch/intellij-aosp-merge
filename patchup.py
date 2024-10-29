@@ -1,4 +1,5 @@
 import sys
+import os
 import subprocess
 
 from deaosp import process as deaosp
@@ -79,7 +80,7 @@ def patch_generate_diff(commit: str) -> PatchSet:
     """
 
     output = subprocess.check_output(
-        ['git', 'diff', '-p', commit, commit + '~1'],
+        ['git', 'diff', '--binary', '-p', commit + '~1', commit],
         cwd=repo,
     )
     return PatchSet(output.decode())
@@ -92,12 +93,20 @@ def patch_process_file(file: PatchedFile) -> str | None:
     """
 
     # only keep changes to the aswb subfolder
-    if (not file.source_file.startswith('a/aswb')):
+    source_aswb = file.source_file.startswith('a/aswb')
+    target_aswb = file.target_file.startswith('b/aswb')
+
+    # for newly add files source is /dev/null and visversa for removed files
+    if (not source_aswb and not target_aswb):
         return None
 
-    # strip the aswb subfolder
-    file.source_file = 'a/' + file.source_file[7:]
-    file.target_file = 'b/' + file.target_file[7:]
+    # strip the aswb subfolder, only from target to not confuse git
+    file.target_file = file.target_file.replace('b/aswb/', 'b/')
+
+    # same for patch info if present
+    if (file.patch_info is not None):
+        for i in range(len(file.patch_info)):
+            file.patch_info[i] = file.patch_info[i].replace('b/aswb/', 'b/')
 
     for hunk in file:
         for line in hunk:
