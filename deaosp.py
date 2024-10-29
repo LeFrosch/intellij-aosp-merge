@@ -52,8 +52,9 @@ REPLACEMENTS = {
     '@maven//:org.mockito.mockito-core': '@mockito//jar',
     '@maven//:com.google.code.gson.gson': '@gson//jar',
 
-    # remap to rules android
+    # remap to rules
     '//:android.bzl': '@rules_android//rules:rules.bzl',
+    '//tools/base/bazel:kotlin.bzl': '@rules_kotlin//kotlin:jvm.bzl',
 
     # remap aosp paths
     **path('tools/adt/idea/aswb'),
@@ -84,8 +85,12 @@ def walk(path):
         for name in files:
             file = os.path.join(dir, name)
 
-            with open(file, 'r') as f:
-                text = f.read()
+            try:
+                with open(file, 'r') as f:
+                    text = f.read()
+            except Exception:
+                print('skipping file: ' + file)
+                continue
 
             text = process(text)
 
@@ -96,4 +101,3 @@ def walk(path):
 if __name__ == '__main__':
     path = sys.argv[1]
     walk(path)
-
