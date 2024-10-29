@@ -80,16 +80,19 @@ def patch_generate_diff(commit: str) -> PatchSet:
     """
 
     output = subprocess.check_output(
-        ['git', 'diff', '--binary', '-p', commit + '~1', commit],
+        ['git', 'diff', '-U5', '--binary', '-p', commit + '~1', commit],
         cwd=repo,
     )
     return PatchSet(output.decode())
 
 
-def patch_process_file(file: PatchedFile) -> str | None:
+def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
     """
     Processes a patched file. Returns either the diff for the file or none if
     the file is not relevant for the patch.
+
+    If reject is true the patch is prepared for `--reject` otherwiese it is
+    prepared for `--3way`.
     """
 
     # only keep changes to the aswb subfolder
@@ -100,8 +103,12 @@ def patch_process_file(file: PatchedFile) -> str | None:
     if (not source_aswb and not target_aswb):
         return None
 
-    # strip the aswb subfolder, only from target to not confuse git
+    # strip the aswb subfolder
     file.target_file = file.target_file.replace('b/aswb/', 'b/')
+
+    # only strip target for `--reject`
+    if (reject):
+        file.source_file = file.source_file.replace('a/aswb/', 'a/')
 
     # same for patch info if present
     if (file.patch_info is not None):
@@ -115,12 +122,12 @@ def patch_process_file(file: PatchedFile) -> str | None:
     return str(file)
 
 
-def patch_process(diff: PatchSet) -> str:
+def patch_process(diff: PatchSet, reject: bool) -> str:
     """
     Processes every file in the commit and concatenates the result to on patch.
     """
 
-    files = (patch_process_file(file) for file in diff)
+    files = (patch_process_file(file, reject) for file in diff)
     return ''.join(filter_none(files))
 
 
@@ -140,41 +147,82 @@ def patch_generate_header(commit: str) -> str:
     return '\n'.join([date, author, author_date, subject, '', body, aosp])
 
 
-def patch_apply(patch: str):
+def patch_apply(patch: str, reject: bool) -> bool:
     """
     Applies the commit to the current branch. Uses a 3 way merge to handle any
-    conflicts.
+    conflicts if reject is false or reject any conflicts.
     """
 
-    subprocess.run(
-        ['git', 'am', '-3'],
+    result = subprocess.run(
+        ['git', 'am', '--reject', '--no-3way']
+        if reject else ['git', 'am', '--3way'],
         cwd=repo,
         input=bytes(patch, encoding='utf-8'),
         stderr=sys.stdout,
         stdout=sys.stdout,
     )
-    print('-> patch applied')
+
+    print(result)
+    return result.returncode == 0
 
 
-def patch_generate(commit: str) -> str:
+def patch_generate(commit: str, reject: bool) -> str:
     """
     Generates a patch from the aosp commit for the idea repository.
+
+    If reject is true the patch is prepared for `--reject` otherwiese it is
+    prepared for `--3way`.
     """
 
     header = patch_generate_header(commit)
     diff = patch_generate_diff(commit)
-    patch = patch_process(diff)
+    patch = patch_process(diff, reject)
 
-    print('-> patch generated')
+    if (reject):
+        print('-> patch generated for reject')
+    else:
+        print('-> patch generated for 3way merge')
 
     return '%s\n%s' % (header, patch)
 
 
-if __name__ == '__main__':
+def abort_am():
+    """
+    Aborts an am merge. Used after 3way merge failed.
+    """
+
+    subprocess.check_call(
+        ['git', 'am', '--abort'],
+        cwd=repo,
+    )
+
+
+def main():
     commit = sys.argv[1]
 
     aosp_remote()
     aosp_fetch()
 
-    patch = patch_generate(commit)
-    patch_apply(patch)
+    patch = patch_generate(commit, reject=False)
+    success = patch_apply(patch, reject=False)
+
+    if (success):
+        print('-> patch applied')
+        return
+
+    answer = input('-> 3way merge failed, abort and generate rejects? [y/n]')
+    if (answer != 'y'):
+        print('-> patch failed')
+        return
+
+    patch = patch_generate(commit, reject=True)
+    success = patch_apply(patch, reject=True)
+
+    if (success):
+        print('-> patch applied')
+    else:
+        print('-> patch failed')
+
+
+if __name__ == '__main__':
+    main()
