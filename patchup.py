@@ -1,5 +1,4 @@
 import sys
-import os
 import subprocess
 
 from deaosp import process as deaosp
@@ -30,17 +29,6 @@ def generate_log(commit: str, format: str) -> str:
         cwd=repo,
     )
     return output.decode()
-
-
-def is_rename(file: PatchedFile) -> bool:
-    if (file.patch_info is None):
-        return False
-
-    for line in file.patch_info:
-        if (line.startswith('rename to')):
-            return True
-
-    return False
 
 
 def aosp_remote():
@@ -91,13 +79,13 @@ def patch_generate_diff(commit: str) -> PatchSet:
     """
 
     output = subprocess.check_output(
-        ['git', 'diff', '-U5', '--binary', '-p', commit + '~1', commit],
+        ['git', 'diff', '-U8', '--binary', '-p', commit + '~1', commit],
         cwd=repo,
     )
     return PatchSet(output.decode())
 
 
-def patch_process_info(info: list[str], reject: bool):
+def patch_process_info(info: list[str]):
     """
     Processes the patch info. It is mutated in place.
     """
@@ -105,16 +93,12 @@ def patch_process_info(info: list[str], reject: bool):
     # process a single info line
     def process(line: str) -> str:
         # strip aswb from diff target
+        line = line.replace(' a/aswb/', ' a/')
         line = line.replace(' b/aswb/', ' b/')
 
-        # only strip aswb from source for `--reject`
-        if (reject):
-            line = line.replace(' a/aswb/', ' a/')
-
-        # fix renames for `--reject`
-        if (reject):
-            line = line.replace('rename to aswb/', 'rename to ')
-            line = line.replace('rename from aswb/', 'rename from ')
+        # strip aswb from rename targets
+        line = line.replace('rename to aswb/', 'rename to ')
+        line = line.replace('rename from aswb/', 'rename from ')
 
         return line
 
@@ -122,7 +106,7 @@ def patch_process_info(info: list[str], reject: bool):
         info[i] = process(info[i])
 
 
-def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
+def patch_process_file(file: PatchedFile) -> str | None:
     """
     Processes a patched file. Returns either the diff for the file or none if
     the file is not relevant for the patch.
@@ -130,10 +114,6 @@ def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
     If reject is true the patch is prepared for `--reject` otherwiese it is
     prepared for `--3way`.
     """
-
-    # if the file is a rename, generate a reject diff
-    if (not reject and is_rename(file)):
-        return patch_process_file(file, reject=True)
 
     # only keep changes to the aswb subfolder
     source_aswb = file.source_file.startswith('a/aswb')
@@ -144,15 +124,12 @@ def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
         return None
 
     # strip the aswb subfolder
+    file.source_file = file.source_file.replace('a/aswb/', 'a/')
     file.target_file = file.target_file.replace('b/aswb/', 'b/')
-
-    # only strip aswb from source for `--reject` or file deletions
-    if (reject or file.target_file == '/dev/null'):
-        file.source_file = file.source_file.replace('a/aswb/', 'a/')
 
     # same for patch info if present
     if (file.patch_info is not None):
-        patch_process_info(file.patch_info, reject)
+        patch_process_info(file.patch_info)
 
     for hunk in file:
         for line in hunk:
@@ -161,12 +138,12 @@ def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
     return str(file)
 
 
-def patch_process(diff: PatchSet, reject: bool) -> str:
+def patch_process(diff: PatchSet) -> str:
     """
     Processes every file in the commit and concatenates the result to on patch.
     """
 
-    files = (patch_process_file(file, reject) for file in diff)
+    files = (patch_process_file(file) for file in diff)
     return ''.join(filter_none(files))
 
 
@@ -193,19 +170,18 @@ def patch_apply(patch: str, reject: bool) -> bool:
     """
 
     result = subprocess.run(
-        ['git', 'am', '--reject', '--no-3way']
-        if reject else ['git', 'am', '--3way'],
+        ['git', 'am', '--reject', '--no-3way', '-C3']
+        if reject else ['git', 'am', '--3way', '-C3'],
         cwd=repo,
         input=bytes(patch, encoding='utf-8'),
         stderr=sys.stdout,
         stdout=sys.stdout,
     )
 
-    print(result)
     return result.returncode == 0
 
 
-def patch_generate(commit: str, reject: bool) -> str:
+def patch_generate(commit: str) -> str:
     """
     Generates a patch from the aosp commit for the idea repository.
 
@@ -215,12 +191,9 @@ def patch_generate(commit: str, reject: bool) -> str:
 
     header = patch_generate_header(commit)
     diff = patch_generate_diff(commit)
-    patch = patch_process(diff, reject)
+    patch = patch_process(diff)
 
-    if (reject):
-        print('-> patch generated for reject')
-    else:
-        print('-> patch generated for 3way merge')
+    print('-> patch generated')
 
     return '%s\n%s' % (header, patch)
 
@@ -242,7 +215,7 @@ def main():
     aosp_remote()
     aosp_fetch()
 
-    patch = patch_generate(commit, reject=False)
+    patch = patch_generate(commit)
     success = patch_apply(patch, reject=False)
 
     if (success):
@@ -255,8 +228,6 @@ def main():
         return
 
     abort_am()
-
-    patch = patch_generate(commit, reject=True)
     success = patch_apply(patch, reject=True)
 
     if (success):
