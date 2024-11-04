@@ -43,6 +43,7 @@ REPLACEMENTS = {
     '//plugin_api:kotlin_for_tests': '//intellij_platform_sdk:kotlin_for_tests',
     '//plugin_api:kotlin': '//intellij_platform_sdk:kotlin',
     '//plugin_api:terminal': '//intellij_platform_sdk:terminal',
+    '//plugin_api:devkit': '//intellij_platform_sdk:plugin_api:devkit',
     '//plugin_api': '//intellij_platform_sdk:plugin_api',
 
     # remap to old maven import style
@@ -51,6 +52,7 @@ REPLACEMENTS = {
     '@maven//:io.grpc.grpc-protobuf': '@protobuf//:protobuf_java',
     '@maven//:org.mockito.mockito-core': '@mockito//jar',
     '@maven//:com.google.code.gson.gson': '@gson//jar',
+    '@maven//:com.google.errorprone.error_prone_annotations': '@error_prone_annotations//jar',
 
     # remap to rules
     '//:android.bzl': '@rules_android//rules:rules.bzl',

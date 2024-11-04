@@ -32,6 +32,17 @@ def generate_log(commit: str, format: str) -> str:
     return output.decode()
 
 
+def is_rename(file: PatchedFile) -> bool:
+    if (file.patch_info is None):
+        return False
+
+    for line in file.patch_info:
+        if (line.startswith('rename to')):
+            return True
+
+    return False
+
+
 def aosp_remote():
     """
     Adds the aosp remote to the repository. The remote is required to fetch the
@@ -86,6 +97,31 @@ def patch_generate_diff(commit: str) -> PatchSet:
     return PatchSet(output.decode())
 
 
+def patch_process_info(info: list[str], reject: bool):
+    """
+    Processes the patch info. It is mutated in place.
+    """
+
+    # process a single info line
+    def process(line: str) -> str:
+        # strip aswb from diff target
+        line = line.replace(' b/aswb/', ' b/')
+
+        # only strip aswb from source for `--reject`
+        if (reject):
+            line = line.replace(' a/aswb/', ' a/')
+
+        # fix renames for `--reject`
+        if (reject):
+            line = line.replace('rename to aswb/', 'rename to ')
+            line = line.replace('rename from aswb/', 'rename from ')
+
+        return line
+
+    for i in range(len(info)):
+        info[i] = process(info[i])
+
+
 def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
     """
     Processes a patched file. Returns either the diff for the file or none if
@@ -94,6 +130,10 @@ def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
     If reject is true the patch is prepared for `--reject` otherwiese it is
     prepared for `--3way`.
     """
+
+    # if the file is a rename, generate a reject diff
+    if (not reject and is_rename(file)):
+        return patch_process_file(file, reject=True)
 
     # only keep changes to the aswb subfolder
     source_aswb = file.source_file.startswith('a/aswb')
@@ -106,14 +146,13 @@ def patch_process_file(file: PatchedFile, reject: bool) -> str | None:
     # strip the aswb subfolder
     file.target_file = file.target_file.replace('b/aswb/', 'b/')
 
-    # only strip target for `--reject`
-    if (reject):
+    # only strip aswb from source for `--reject` or file deletions
+    if (reject or file.target_file == '/dev/null'):
         file.source_file = file.source_file.replace('a/aswb/', 'a/')
 
     # same for patch info if present
     if (file.patch_info is not None):
-        for i in range(len(file.patch_info)):
-            file.patch_info[i] = file.patch_info[i].replace('b/aswb/', 'b/')
+        patch_process_info(file.patch_info, reject)
 
     for hunk in file:
         for line in hunk:
@@ -210,10 +249,12 @@ def main():
         print('-> patch applied')
         return
 
-    answer = input('-> 3way merge failed, abort and generate rejects? [y/n]')
+    answer = input('-> 3way merge failed, fallback to no-3way? [y/n]')
     if (answer != 'y'):
         print('-> patch failed')
         return
+
+    abort_am()
 
     patch = patch_generate(commit, reject=True)
     success = patch_apply(patch, reject=True)
@@ -221,7 +262,7 @@ def main():
     if (success):
         print('-> patch applied')
     else:
-        print('-> patch failed')
+        print('-> patch applied with rejects')
 
 
 if __name__ == '__main__':
