@@ -134,7 +134,7 @@ def patch_generate(repo: str, commit: str) -> str:
     diff = patch_generate_diff(repo, commit)
     patch = patch_process(diff)
 
-    print('-> patch generated')
+    log('patch generated')
 
     return '%s\n%s' % (header, patch)
 

@@ -55,6 +55,7 @@ def git_log(repo: str, commit: str, format: str) -> str:
         %s   Commit subject
         %b   Commit body
         %ad  Author data
+        %H   Commit hash
     """
 
     output = subprocess.check_output(
