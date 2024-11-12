@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling", "hatch-requirements-txt"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aosp"
+dynamic = ["version", "description", "dependencies"]
+authors = [{ name = "Daniel Brauner", email = "daniel.brauner@jetbrains.com" }]
+license-files = { paths = ["LICENSE"] }
+readme = "README.md"
+requires-python = ">=3.12"
+
+[project.scripts]
+aosp = "aosp:main"
+
+[tool.hatch.version]
+path = "aosp/__about__.py"
+
+[tool.hatch.description]
+path = "aosp/__about__.py"
+
+[tool.hatch.metadata.hooks.requirements_txt]
+files = ["requirements.txt"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["aosp"]
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.format]
+quote-style = "single"

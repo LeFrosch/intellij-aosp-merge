@@ -1,8 +1,15 @@
-import sys
 import os
+import argparse
+
+from ._util import log
 
 
 def repo(label):
+    """
+    Creates two replacements for a repository label. One for trailing `/` and
+    one for `:`.
+    """
+
     return {
         f'{label}/': '//',
         f'{label}:': '//:',
@@ -10,6 +17,10 @@ def repo(label):
 
 
 def path(value):
+    """
+    Creates two replacements for a path. One for trailing `/` and without.
+    """
+
     return {
         f'{value}/': '',
         f'{value}': '',
@@ -92,7 +103,7 @@ def walk(path):
                 with open(file, 'r') as f:
                     text = f.read()
             except Exception:
-                print('skipping file: ' + file)
+                log('skipping file: ' + file)
                 continue
 
             text = process(text)
@@ -101,6 +112,14 @@ def walk(path):
                 f.write(text)
 
 
-if __name__ == '__main__':
-    path = sys.argv[1]
-    walk(path)
+def configure(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        'path',
+        type=str,
+        help='path of the directory to convert'
+    )
+
+
+def execute(args: argparse.Namespace):
+    log('walking directory %s' % args.path)
+    walk(args.path)

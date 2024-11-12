@@ -1,12 +1,12 @@
 import sys
 import subprocess
-
-from deaosp import process as deaosp
+import argparse
 
 from unidiff import PatchSet, PatchedFile
 
-AOSP_REMOTE = 'https://android.googlesource.com/platform/tools/adt/idea'
-AOSP_BRANCH = 'mirror-goog-studio-main'
+from ._deaosp import process as deaosp
+from ._git import git_add_aosp, git_fetch_aosp, git_log
+from ._util import log, ask, filter_none
 
 MAGIC_DATE = 'From %s Mon Sep 17 00:00:00 2001'
 AUTHOR = 'Googler <intellij-github@google.com>'
@@ -14,66 +14,7 @@ AUTHOR = 'Googler <intellij-github@google.com>'
 repo = '/Volumes/Projects/bazel/intellij'
 
 
-def log_error(message: str):
-    print(message, file=sys.stderr)
-    sys.exit(1)
-
-
-def filter_none(generator):
-    return (x for x in generator if x is not None)
-
-
-def generate_log(commit: str, format: str) -> str:
-    output = subprocess.check_output(
-        ['git', 'log', '--pretty=format:' + format, '-n 1', commit],
-        cwd=repo,
-    )
-    return output.decode()
-
-
-def aosp_remote():
-    """
-    Adds the aosp remote to the repository. The remote is required to fetch the
-    commit and for the 3-way merge.
-    """
-
-    try:
-        output = subprocess.check_output(
-            ['git', 'remote', 'get-url', 'aosp'],
-            cwd=repo,
-        )
-
-        if (output.decode().strip() == AOSP_REMOTE):
-            return
-
-        log_error(
-            'remote aosp exists but does not point to %s' % AOSP_REMOTE
-        )
-
-    except subprocess.CalledProcessError:
-        # get url failed, most likely because remote does not exist
-        subprocess.check_call(
-            ['git', 'remote', 'add', 'aosp', AOSP_REMOTE],
-            cwd=repo,
-        )
-        print('-> added aosp remote')
-
-
-def aosp_fetch():
-    """
-    Fetches the main branch from the aosp repository.
-    """
-
-    subprocess.check_call(
-        ['git', 'fetch', 'aosp', AOSP_BRANCH],
-        cwd=repo,
-        stderr=sys.stdout,
-        stdout=sys.stdout,
-    )
-    print('-> aosp up to date')
-
-
-def patch_generate_diff(commit: str) -> PatchSet:
+def patch_generate_diff(repo: str, commit: str) -> PatchSet:
     """
     Generates and parsed the git diff for the patch.
     """
@@ -147,7 +88,7 @@ def patch_process(diff: PatchSet) -> str:
     return ''.join(filter_none(files))
 
 
-def patch_generate_header(commit: str) -> str:
+def patch_generate_header(repo: str, commit: str) -> str:
     """
     Generates the header for the patch. Copies evertying from the original
     commit but overrides the author and adds the aosp commit id.
@@ -155,15 +96,15 @@ def patch_generate_header(commit: str) -> str:
 
     date = MAGIC_DATE % commit
     author = 'From: %s' % AUTHOR
-    author_date = 'Data: %s' % generate_log(commit, '%ad')
-    subject = 'Subject: [PATCH] %s' % generate_log(commit, '%s')
-    body = generate_log(commit, '%b')
+    author_date = 'Data: %s' % git_log(repo, commit, '%ad')
+    subject = 'Subject: [PATCH] %s' % git_log(repo, commit, '%s')
+    body = git_log(repo, commit, '%b')
     aosp = 'AOSP: %s' % commit
 
     return '\n'.join([date, author, author_date, subject, '', body, aosp])
 
 
-def patch_apply(patch: str, reject: bool) -> bool:
+def patch_apply(repo: str, patch: str, reject: bool) -> bool:
     """
     Applies the commit to the current branch. Uses a 3 way merge to handle any
     conflicts if reject is false or reject any conflicts.
@@ -181,7 +122,7 @@ def patch_apply(patch: str, reject: bool) -> bool:
     return result.returncode == 0
 
 
-def patch_generate(commit: str) -> str:
+def patch_generate(repo: str, commit: str) -> str:
     """
     Generates a patch from the aosp commit for the idea repository.
 
@@ -189,8 +130,8 @@ def patch_generate(commit: str) -> str:
     prepared for `--3way`.
     """
 
-    header = patch_generate_header(commit)
-    diff = patch_generate_diff(commit)
+    header = patch_generate_header(repo, commit)
+    diff = patch_generate_diff(repo, commit)
     patch = patch_process(diff)
 
     print('-> patch generated')
@@ -198,7 +139,7 @@ def patch_generate(commit: str) -> str:
     return '%s\n%s' % (header, patch)
 
 
-def abort_am():
+def abort_am(repo: str):
     """
     Aborts an am merge. Used after 3way merge failed.
     """
@@ -209,32 +150,35 @@ def abort_am():
     )
 
 
-def main():
-    commit = sys.argv[1]
+def configure(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        'commit',
+        type=str,
+        help='hash of the commit to pick'
+    )
 
-    aosp_remote()
-    aosp_fetch()
 
-    patch = patch_generate(commit)
-    success = patch_apply(patch, reject=False)
+def execute(args: argparse.Namespace):
+    repo = args.repo
 
-    if (success):
-        print('-> patch applied')
-        return
+    git_add_aosp(repo)
+    git_fetch_aosp(repo)
 
-    answer = input('-> 3way merge failed, fallback to no-3way? [y/n]')
-    if (answer != 'y'):
-        print('-> patch failed')
-        return
-
-    abort_am()
-    success = patch_apply(patch, reject=True)
+    patch = patch_generate(repo, args.commit)
+    success = patch_apply(repo, patch, reject=False)
 
     if (success):
-        print('-> patch applied')
+        log('patch applied')
+        return
+
+    if (not ask('3way merge failed, fallback to no-3way?')):
+        log('patch failed')
+        return
+
+    abort_am(repo)
+    success = patch_apply(repo, patch, reject=True)
+
+    if (success):
+        log('patch applied')
     else:
-        print('-> patch applied with rejects')
-
-
-if __name__ == '__main__':
-    main()
+        log('patch applied with rejects')
