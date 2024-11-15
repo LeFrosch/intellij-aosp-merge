@@ -12,6 +12,16 @@ from . import (
 from .__about__ import __version__, __description__
 
 
+def add_repo_argument(parser: argparse.ArgumentParser):
+    repo = os.environ.get('REPO')
+    help = 'path to the git repository (env: REPO)'
+
+    if repo is not None:
+        parser.add_argument('--repo', type=str, help=help, default=repo)
+    else:
+        parser.add_argument('--repo', type=str, help=help, required=True)
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__description__)
 
@@ -21,12 +31,7 @@ def parse_arguments() -> argparse.Namespace:
         version=__version__,
     )
 
-    parser.add_argument(
-        '--repo',
-        type=str,
-        help='path to the git repository (env: REPO)',
-        default=os.environ.get('REPO'),
-    )
+    add_repo_argument(parser)
 
     commands = parser.add_subparsers(
         required=True,
