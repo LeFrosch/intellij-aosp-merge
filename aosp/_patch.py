@@ -7,6 +7,7 @@ from unidiff import PatchSet, PatchedFile
 from ._deaosp import process as deaosp
 from ._git import git_add_aosp, git_fetch_aosp, git_log
 from ._util import log, ask, filter_none
+from ._test import execute as test
 
 MAGIC_DATE = 'From %s Mon Sep 17 00:00:00 2001'
 AUTHOR = 'Googler <intellij-github@google.com>'
@@ -150,15 +151,7 @@ def abort_am(repo: str):
     )
 
 
-def configure(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        'commit',
-        type=str,
-        help='hash of the commit to pick'
-    )
-
-
-def execute(args: argparse.Namespace):
+def patch(args: argparse) -> bool:
     repo = args.repo
 
     git_add_aosp(repo)
@@ -167,18 +160,40 @@ def execute(args: argparse.Namespace):
     patch = patch_generate(repo, args.commit)
     success = patch_apply(repo, patch, reject=False)
 
-    if (success):
+    if success:
         log('patch applied')
-        return
+        return success
 
-    if (not ask('3way merge failed, fallback to no-3way?')):
+    if not ask('3way merge failed, fallback to no-3way?'):
         log('patch failed')
-        return
+        return False
 
     abort_am(repo)
     success = patch_apply(repo, patch, reject=True)
 
-    if (success):
+    if success:
         log('patch applied')
     else:
         log('patch applied with rejects')
+
+    return success
+
+
+def configure(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        'commit',
+        type=str,
+        help='hash of the commit to pick'
+    )
+    parser.add_argument(
+        '--test',
+        action='store_true',
+        help='runs test after successful patch'
+    )
+
+
+def execute(args: argparse.Namespace):
+    success = patch(args)
+
+    if args.test and (success or ask('run tests anyway?')):
+        test(args)

@@ -6,6 +6,7 @@ from . import (
     _deaosp as deaosp,
     _missing as missing,
     _review as review,
+    _test as test,
 )
 
 from .__about__ import __version__, __description__
@@ -59,6 +60,13 @@ def parse_arguments() -> argparse.Namespace:
     )
     review_parser.set_defaults(execute=review.execute)
     review.configure(review_parser)
+
+    test_parser = commands.add_parser(
+        'test',
+        help='runs a suite of tests against the current branch',
+    )
+    test_parser.set_defaults(execute=test.execute)
+    test.configure(test_parser)
 
     return parser.parse_args()
 

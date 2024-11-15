@@ -20,5 +20,9 @@ def ask(question: str) -> bool:
             return False
 
 
+def wait(message: str):
+    input('-> %s' % message)
+
+
 def filter_none(generator):
     return (x for x in generator if x is not None)
