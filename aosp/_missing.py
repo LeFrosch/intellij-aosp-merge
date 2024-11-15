@@ -28,7 +28,7 @@ def format_commit(repo: str, commit: str) -> str:
         commit,
         commit,
         git_log(repo, commit, '%s'),
-        git_log(repo, commit, '%ad'),
+        git_log(repo, commit, '%as'),
     )
 
 
