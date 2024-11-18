@@ -12,12 +12,15 @@ from ._util import log, log_error
 
 def get_aosp_commit(repo: str, commit: str) -> str:
     body = git_log(repo, commit, '%b')
-    line = body.splitlines()[-1]
+    aosp_lines = [ line for line in body.splitlines() if line.startswith('AOSP: ') ]
 
-    if (not line.startswith('AOSP: ')):
-        log_error('commit body does not contain a aosp reference')
+    if (len(aosp_lines) == 0):
+        log_error('commit body does not contain a aosp reference:\n %s' % commit)
 
-    return line[6:]
+    if (len(aosp_lines) > 1):
+        log_error('commit body contains more than one aosp reference:\n %s' % commit)
+
+    return aosp_lines[0][6:]
 
 
 def generate_diff(repo: str, commit: str) -> PatchSet:
