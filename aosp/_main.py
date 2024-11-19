@@ -7,6 +7,7 @@ from . import (
     _missing as missing,
     _review as review,
     _test as test,
+    _pick as pick,
 )
 
 from .__about__ import __version__, __description__
@@ -72,6 +73,13 @@ def parse_arguments() -> argparse.Namespace:
     )
     test_parser.set_defaults(execute=test.execute)
     test.configure(test_parser)
+
+    pick_parser = commands.add_parser(
+        'pick',
+        help='utility for picking a single commit',
+    )
+    pick_parser.set_defaults(execute=pick.execute)
+    pick.configure(pick_parser)
 
     return parser.parse_args()
 

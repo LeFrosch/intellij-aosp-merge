@@ -1,8 +1,8 @@
 import argparse
 import subprocess
 
-from ._aosp import AOSP_URL, AOSP_REF
-from ._git import git_add_aosp, git_fetch_aosp, git_log
+from ._consts import AOSP_URL, AOSP_REF
+from ._git import git_setup_aosp, git_log
 from ._util import log
 
 
@@ -50,9 +50,7 @@ def configure(parser: argparse.ArgumentParser):
 
 def execute(args: argparse.Namespace):
     repo = args.repo
-
-    git_add_aosp(repo)
-    git_fetch_aosp(repo)
+    git_setup_aosp(repo)
 
     log('collectting commits')
     missing = collect_missing_commits(repo, args.commit)

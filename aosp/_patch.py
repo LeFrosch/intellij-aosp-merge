@@ -5,7 +5,7 @@ import os
 
 from unidiff import PatchSet, PatchedFile
 
-from ._git import git_add_aosp, git_fetch_aosp, git_log
+from ._git import git_setup_aosp, git_log, git_rebase_in_progress
 from ._deaosp import process as deaosp
 from ._util import log, log_error, filter_none, choose
 
@@ -141,34 +141,21 @@ def patch_generate(repo: str, commit: str) -> str:
 
 
 def git_am_continue(repo: str):
-    """
-    Runs a git am --coninue command
-    """
-
     subprocess.check_call(
         ['git', 'am', '--continue'],
         cwd=repo,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
     )
 
 
 def git_am_abort(repo: str):
-    """
-    Runs a git am --abort command
-    """
-
     subprocess.check_call(
         ['git', 'am', '--abort'],
         cwd=repo,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
     )
-
-
-def git_rebase_in_progress(repo: str) -> bool:
-    """
-    Checks if the .git/rebase-apply directory exists. Simple heuristic if a git
-    am is in progress.
-    """
-
-    return os.path.isdir(os.path.join(repo, '.git', 'rebase-apply'))
 
 
 def delete_reject_files(repo: str) -> bool:
@@ -183,6 +170,10 @@ def delete_reject_files(repo: str) -> bool:
 
 
 def try_3way_merge(repo: str, patch: str) -> bool:
+    """
+    Tries to apply the patch using 3 way merge.
+    """
+
     success = patch_apply(repo, patch, reject=False)
 
     if success:
@@ -214,6 +205,10 @@ def try_3way_merge(repo: str, patch: str) -> bool:
 
 
 def try_reject_merge(repo: str, patch: str) -> bool:
+    """
+    Tries to apply the patch by generating reject files.
+    """
+
     success = patch_apply(repo, patch, reject=True)
 
     if success:
@@ -249,14 +244,13 @@ def configure(parser: argparse.ArgumentParser):
     )
 
 
-def execute(args: argparse.Namespace):
+def execute(args: argparse.Namespace) -> bool:
     if git_rebase_in_progress(args.repo):
         log_error('a rebase is in progress')
 
     repo = args.repo
-
-    git_add_aosp(repo)
-    git_fetch_aosp(repo)
+    git_setup_aosp(repo)
 
     patch = patch_generate(repo, args.commit)
+
     return try_3way_merge(repo, patch) or try_reject_merge(repo, patch)

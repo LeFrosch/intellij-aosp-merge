@@ -6,21 +6,8 @@ import sys
 from unidiff import PatchSet
 
 from ._patch import patch_process as aosp_process_diff
-from ._git import git_add_aosp, git_fetch_aosp, git_log
-from ._util import log, log_error
-
-
-def get_aosp_commit(repo: str, commit: str) -> str:
-    body = git_log(repo, commit, '%b')
-    aosp_lines = [ line for line in body.splitlines() if line.startswith('AOSP: ') ]
-
-    if (len(aosp_lines) == 0):
-        log_error('commit body does not contain a aosp reference:\n %s' % commit)
-
-    if (len(aosp_lines) > 1):
-        log_error('commit body contains more than one aosp reference:\n %s' % commit)
-
-    return aosp_lines[0][6:]
+from ._git import git_setup_aosp, git_log, git_read_aosp_commit
+from ._util import log
 
 
 def generate_diff(repo: str, commit: str) -> PatchSet:
@@ -78,12 +65,10 @@ def show_diff_diff(repo: str, repo_diff: str, aosp_diff: str):
 
 def execute(args: argparse.Namespace):
     repo = args.repo
-
-    git_add_aosp(repo)
-    git_fetch_aosp(repo)
+    git_setup_aosp(repo)
 
     repo_commit = git_log(repo, args.commit, '%H')
-    aosp_commit = get_aosp_commit(repo, args.commit)
+    aosp_commit = git_read_aosp_commit(repo, args.commit)
 
     log('genreating repo diff for %s' % repo_commit)
     repo_diff = str(generate_diff(repo, repo_commit))

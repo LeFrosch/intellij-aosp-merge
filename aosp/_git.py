@@ -1,50 +1,79 @@
 import subprocess
 import sys
+import os
+
+from ._consts import (
+    AOSP_REMOTE,
+    AOSP_ORIGIN,
+    AOSP_BRANCH,
+    INTELLIJ_REMOTE,
+    INTELLIJ_ORIGIN,
+    INTELLIJ_BRANCH,
+)
 
 from ._util import log, log_error
-from ._aosp import AOSP_REMOTE, AOSP_ORIGIN, AOSP_BRANCH
 
 
-def git_add_aosp(repo: str):
+def git_add_remote(repo: str, origin: str, remote: str):
     """
-    Adds the aosp remote to the repository or checks that the remote points to
-    the right URL if it exists.
+    Adds a remote to the repository or checks that the remote points to the
+    right URL if it exists.
     """
 
     try:
         output = subprocess.check_output(
-            ['git', 'remote', 'get-url', AOSP_ORIGIN],
+            ['git', 'remote', 'get-url', origin],
             cwd=repo,
         )
 
-        if (output.decode().strip() == AOSP_REMOTE):
+        if (output.decode().strip() == remote):
             return
 
         log_error(
-            'remote aosp exists but does not point to %s' % AOSP_REMOTE
+            'remote %s exists but does not point to %s' % (origin, remote)
         )
 
     except subprocess.CalledProcessError:
         # get url failed, most likely because remote does not exist
         subprocess.check_call(
-            ['git', 'remote', 'add', AOSP_ORIGIN, AOSP_REMOTE],
+            ['git', 'remote', 'add', origin, remote],
             cwd=repo,
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
         )
-        log('added aosp remote')
+        log('added %s remote' % origin)
 
 
-def git_fetch_aosp(repo: str):
+def git_fetch_remote(repo: str, origin: str, branch: str):
     """
-    Fetches the main branch from the aosp repository.
+    Fetches a branch from the origin.
     """
 
     subprocess.check_call(
-        ['git', 'fetch', AOSP_ORIGIN, AOSP_BRANCH],
+        ['git', 'fetch', origin, branch],
         cwd=repo,
         stderr=sys.stdout,
         stdout=sys.stdout,
     )
-    log('aosp up to date')
+    log('%s up to date' % origin)
+
+
+def git_setup_aosp(repo: str):
+    """
+    Adds the aosp remote to the repository and fetches the main branch.
+    """
+
+    git_add_remote(repo, AOSP_ORIGIN, AOSP_REMOTE)
+    git_fetch_remote(repo, AOSP_ORIGIN, AOSP_BRANCH)
+
+
+def git_setup_intellij(repo: str):
+    """
+    Adds the intelli remote to the repository and fetches the main branch.
+    """
+
+    git_add_remote(repo, INTELLIJ_ORIGIN, INTELLIJ_REMOTE)
+    git_fetch_remote(repo, INTELLIJ_ORIGIN, INTELLIJ_BRANCH)
 
 
 def git_log(repo: str, commit: str, format: str) -> str:
@@ -63,3 +92,35 @@ def git_log(repo: str, commit: str, format: str) -> str:
         cwd=repo,
     )
     return output.decode()
+
+
+def git_rebase_in_progress(repo: str) -> bool:
+    """
+    Checks if the .git/rebase-apply directory exists. Simple heuristic if a git
+    am is in progress.
+    """
+
+    return os.path.isdir(os.path.join(repo, '.git', 'rebase-apply'))
+
+
+def git_read_aosp_commit(repo: str, commit: str) -> str:
+    """
+    Finds the `AOSP: ...` line in the commit body and returns the AOSP commit
+    hash.
+    """
+
+    body = git_log(repo, commit, '%b')
+    aosp_lines = [line for line in body.splitlines()
+                  if line.startswith('AOSP: ')]
+
+    if (len(aosp_lines) == 0):
+        log_error(
+            'commit body does not contain a aosp reference:\n %s' % commit
+        )
+
+    if (len(aosp_lines) > 1):
+        log_error(
+            'commit body contains more than one aosp reference:\n %s' % commit
+        )
+
+    return aosp_lines[0][6:]
