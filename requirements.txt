@@ -1,1 +1,2 @@
 unidiff~=0.7.5
+simple-term-menu~=1.6.4

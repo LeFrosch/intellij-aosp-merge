@@ -1,13 +1,13 @@
 import sys
 import subprocess
 import argparse
+import os
 
 from unidiff import PatchSet, PatchedFile
 
-from ._deaosp import process as deaosp
 from ._git import git_add_aosp, git_fetch_aosp, git_log
-from ._util import log, ask, filter_none
-from ._test import execute as test
+from ._deaosp import process as deaosp
+from ._util import log, log_error, filter_none, choose
 
 MAGIC_DATE = 'From %s Mon Sep 17 00:00:00 2001'
 AUTHOR = 'Googler <intellij-github@google.com>'
@@ -140,9 +140,20 @@ def patch_generate(repo: str, commit: str) -> str:
     return '%s\n%s' % (header, patch)
 
 
-def abort_am(repo: str):
+def git_am_continue(repo: str):
     """
-    Aborts an am merge. Used after 3way merge failed.
+    Runs a git am --coninue command
+    """
+
+    subprocess.check_call(
+        ['git', 'am', '--continue'],
+        cwd=repo,
+    )
+
+
+def git_am_abort(repo: str):
+    """
+    Runs a git am --abort command
     """
 
     subprocess.check_call(
@@ -151,32 +162,83 @@ def abort_am(repo: str):
     )
 
 
-def patch(args: argparse) -> bool:
-    repo = args.repo
+def git_rebase_in_progress(repo: str) -> bool:
+    """
+    Checks if the .git/rebase-apply directory exists. Simple heuristic if a git
+    am is in progress.
+    """
 
-    git_add_aosp(repo)
-    git_fetch_aosp(repo)
+    return os.path.isdir(os.path.join(repo, '.git', 'rebase-apply'))
 
-    patch = patch_generate(repo, args.commit)
+
+def delete_reject_files(repo: str) -> bool:
+    """
+    Deletes all reject files that might be left over.
+    """
+
+    for dir, _, files in os.walk(repo):
+        for name in files:
+            if name.endswith('.rej'):
+                os.remove(os.path.join(dir, name))
+
+
+def try_3way_merge(repo: str, patch: str) -> bool:
     success = patch_apply(repo, patch, reject=False)
 
     if success:
         log('patch applied')
-        return success
+        return True
 
-    if not ask('3way merge failed, fallback to no-3way?'):
+    # if the patch failed but a rebase is in progress, there are conflicts
+    if not git_rebase_in_progress(repo):
         log('patch failed')
         return False
 
-    abort_am(repo)
+    result = choose(
+        title='patch could not be applied automaticaly',
+        options=[
+            '[c] resolved conflicts, continue',
+            '[a] abort',
+        ],
+    )
+
+    if result == 'a':
+        git_am_abort(repo)
+        log('patch aborted')
+        return False
+
+    git_am_continue(repo)
+    log('patch applied')
+
+    return True
+
+
+def try_reject_merge(repo: str, patch: str) -> bool:
     success = patch_apply(repo, patch, reject=True)
 
     if success:
         log('patch applied')
-    else:
-        log('patch applied with rejects')
+        return True
 
-    return success
+    result = choose(
+        title='patch could not be applied automaticaly',
+        options=[
+            '[c] resolved conflicts, continue',
+            '[a] abort',
+        ],
+    )
+
+    delete_reject_files(repo)
+
+    if result == 'a':
+        git_am_abort(repo)
+        log('patch aborted')
+        return False
+
+    git_am_continue(repo)
+    log('patch applied')
+
+    return True
 
 
 def configure(parser: argparse.ArgumentParser):
@@ -185,15 +247,16 @@ def configure(parser: argparse.ArgumentParser):
         type=str,
         help='hash of the commit to pick'
     )
-    parser.add_argument(
-        '--test',
-        action='store_true',
-        help='runs test after successful patch'
-    )
 
 
 def execute(args: argparse.Namespace):
-    success = patch(args)
+    if git_rebase_in_progress(args.repo):
+        log_error('a rebase is in progress')
 
-    if args.test and (success or ask('run tests anyway?')):
-        test(args)
+    repo = args.repo
+
+    git_add_aosp(repo)
+    git_fetch_aosp(repo)
+
+    patch = patch_generate(repo, args.commit)
+    return try_3way_merge(repo, patch) or try_reject_merge(repo, patch)
