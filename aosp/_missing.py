@@ -56,6 +56,9 @@ def execute(args: argparse.Namespace):
     missing = collect_missing_commits(repo, args.commit)
 
     log('found %d missing commits' % len(missing))
+    if len(missing) == 0:
+        return
+
     content = '\n'.join(format_commit(repo, it) for it in reversed(missing))
 
     log('writing commits to %s' % args.output)
