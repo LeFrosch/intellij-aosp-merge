@@ -5,7 +5,13 @@ import os
 
 from unidiff import PatchSet, PatchedFile
 
-from ._git import git_setup_aosp, git_log, git_rebase_in_progress
+from ._git import (
+    git_setup_aosp,
+    git_log,
+    git_rebase_in_progress,
+    git_try_read_aosp_commit,
+)
+
 from ._deaosp import process as deaosp
 from ._util import log, log_error, filter_none, choose
 
@@ -142,6 +148,12 @@ def patch_generate(repo: str, commit: str) -> str:
 
 def git_am_continue(repo: str):
     subprocess.check_call(
+        ['git', 'add', '.'],
+        cwd=repo,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
+    subprocess.check_call(
         ['git', 'am', '--continue'],
         cwd=repo,
         stderr=subprocess.DEVNULL,
@@ -156,9 +168,15 @@ def git_am_abort(repo: str):
         stderr=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
     )
+    subprocess.check_call(
+        ['git', 'reset', '--hard', 'HEAD'],
+        cwd=repo,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
 
 
-def delete_reject_files(repo: str) -> bool:
+def delete_reject_files(repo: str):
     """
     Deletes all reject files that might be left over.
     """
@@ -245,10 +263,15 @@ def configure(parser: argparse.ArgumentParser):
 
 
 def execute(args: argparse.Namespace) -> bool:
-    if git_rebase_in_progress(args.repo):
+    repo = args.repo
+
+    if git_rebase_in_progress(repo):
         log_error('a rebase is in progress')
 
-    repo = args.repo
+    if git_try_read_aosp_commit(repo, 'HEAD') == args.commit:
+        log('commit already applied')
+        return True
+
     git_setup_aosp(repo)
 
     patch = patch_generate(repo, args.commit)

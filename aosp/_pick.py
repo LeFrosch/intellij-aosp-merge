@@ -2,11 +2,18 @@ import argparse
 import subprocess
 import sys
 
-from ._git import git_setup_intellij, git_rebase_in_progress, git_log, git_read_aosp_commit
+from ._git import (
+    git_setup_intellij,
+    git_rebase_in_progress,
+    git_log,
+    git_read_aosp_commit,
+    git_list_files,
+)
+
 from ._patch import execute as patch, configure as patch_configure
 from ._test import execute as test, configure as test_configure
 from ._consts import INTELLIJ_REF, AOSP_URL
-from ._util import log, log_error, choose, ask
+from ._util import log, log_error, choose, ask, first
 
 
 def git_get_head(repo: str) -> str:
@@ -134,7 +141,7 @@ def try_pick(repo: str, commit: str):
     log('commit picked')
 
 
-def create_pr(repo: str, aosp_commit: str, draft: bool):
+def create_pr(repo: str, commit: str, aosp_commit: str, draft: bool):
     """
     Uses the github cli to create a new PR.
     """
@@ -144,7 +151,7 @@ def create_pr(repo: str, aosp_commit: str, draft: bool):
         aosp_commit,
         AOSP_URL,
         aosp_commit,
-        git_log(repo, aosp_commit, '%b'),
+        git_log(repo, commit, '%b'),
     )
 
     subprocess.check_call(
@@ -167,6 +174,22 @@ def create_pr(repo: str, aosp_commit: str, draft: bool):
     )
 
 
+def check(repo: str, commit: str, others: list[str]):
+    if others is None or len(others) == 0:
+        return
+
+    files = set(git_list_files(repo, commit))
+
+    for other in others:
+        other_files = set(git_list_files(repo, other))
+        intersection = files & other_files
+
+        if len(intersection) == 0:
+            continue
+
+        log_error('conflicts with %s at %s' % (other, first(intersection)))
+
+
 def configure(parser: argparse.ArgumentParser):
     patch_configure(parser)
     test_configure(parser)
@@ -183,9 +206,19 @@ def configure(parser: argparse.ArgumentParser):
         help='creates a draft PR',
         default=False,
     )
+    parser.add_argument(
+        '--check',
+        type=str,
+        nargs='+',
+        help='ensure that the commit cannot conflict with these commits',
+    )
 
 
 def execute(args: argparse.Namespace):
+    repo = args.repo
+
+    check(repo, args.commit, args.check)
+
     if not patch(args):
         return
 
@@ -195,7 +228,6 @@ def execute(args: argparse.Namespace):
     if not ask('create PR from commit'):
         return
 
-    repo = args.repo
     git_setup_intellij(repo)
 
     commit = git_get_head(repo)
@@ -213,7 +245,7 @@ def execute(args: argparse.Namespace):
         git_push(repo, branch)
         log('branch pushed')
 
-        create_pr(repo, aosp_commit, args.draft)
+        create_pr(repo, commit, aosp_commit, args.draft)
         log('PR created')
 
     finally:

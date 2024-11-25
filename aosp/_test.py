@@ -2,7 +2,7 @@ import sys
 import subprocess
 import argparse
 
-from ._util import log, wait
+from ._util import log, choose, exit
 
 TEST_CASES = [
     ('//:clwb_tests', 'clion-oss-latest-stable'),
@@ -17,6 +17,8 @@ def bazel_test(repo: str, target: str, ij_product: str):
     """
 
     while True:
+        log('executing test %s' % target)
+
         success = subprocess.run(
             [
                 'bazel',
@@ -33,9 +35,17 @@ def bazel_test(repo: str, target: str, ij_product: str):
         if success:
             log('test %s passed' % target)
             break
-        else:
-            wait('test %s failed, press enter to retry' % target)
-            continue
+
+        result = choose(
+            title='test %s failed, press enter to retry' % target,
+            options=[
+                '[r] retry',
+                '[a] abort',
+            ],
+        )
+
+        if result == "a":
+            exit("test aborted")
 
 
 def configure(parser: argparse.ArgumentParser):
@@ -43,8 +53,6 @@ def configure(parser: argparse.ArgumentParser):
 
 
 def execute(args: argparse.Namespace):
-    log('executing tests')
-
     for (target, product) in TEST_CASES:
         bazel_test(args.repo, target, product)
 

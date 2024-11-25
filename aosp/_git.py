@@ -103,24 +103,48 @@ def git_rebase_in_progress(repo: str) -> bool:
     return os.path.isdir(os.path.join(repo, '.git', 'rebase-apply'))
 
 
-def git_read_aosp_commit(repo: str, commit: str) -> str:
+def git_try_read_aosp_commit(repo: str, commit: str) -> str | None:
     """
     Finds the `AOSP: ...` line in the commit body and returns the AOSP commit
-    hash.
+    hash or None if there is no such line.
     """
 
     body = git_log(repo, commit, '%b')
     aosp_lines = [line for line in body.splitlines()
                   if line.startswith('AOSP: ')]
 
-    if (len(aosp_lines) == 0):
-        log_error(
-            'commit body does not contain a aosp reference:\n %s' % commit
-        )
+    if len(aosp_lines) == 0:
+        return None
 
-    if (len(aosp_lines) > 1):
+    if len(aosp_lines) > 1:
+        return None
+
+    return aosp_lines[0][6:]
+
+
+def git_read_aosp_commit(repo: str, commit: str) -> str:
+    """
+    Finds the `AOSP: ...` line in the commit body and returns the AOSP commit
+    hash or errors if there is no such line.
+    """
+
+    aosp_commit = git_try_read_aosp_commit(repo, commit)
+
+    if aosp_commit is None:
         log_error(
             'commit body contains more than one aosp reference:\n %s' % commit
         )
 
-    return aosp_lines[0][6:]
+    return aosp_commit
+
+
+def git_list_files(repo: str, commit: str) -> list[str]:
+    """
+    Gets all files modified by this commit.
+    """
+
+    output = subprocess.check_output(
+        ['git', 'diff-tree', '--no-commit-id', '--name-only', commit, '-r'],
+        cwd=repo,
+    )
+    return output.decode().splitlines()
