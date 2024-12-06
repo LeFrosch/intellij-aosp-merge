@@ -27,7 +27,7 @@ def patch_generate_diff(repo: str, commit: str) -> PatchSet:
     """
 
     output = subprocess.check_output(
-        ['git', 'diff', '-U8', '--binary', '-p', commit + '~1', commit],
+        ['git', 'diff', '--binary', '-p', commit + '~1', commit],
         cwd=repo,
     )
     return PatchSet(output.decode())
@@ -118,8 +118,8 @@ def patch_apply(repo: str, patch: str, reject: bool) -> bool:
     """
 
     result = subprocess.run(
-        ['git', 'am', '--reject', '--no-3way', '-C3']
-        if reject else ['git', 'am', '--3way', '-C3'],
+        ['git', 'am', '--reject', '--no-3way', '--ignore-whitespace']
+        if reject else ['git', 'am', '--3way', '--ignore-whitespace'],
         cwd=repo,
         input=bytes(patch, encoding='utf-8'),
         stderr=sys.stdout,
@@ -147,6 +147,17 @@ def patch_generate(repo: str, commit: str) -> str:
 
 
 def git_am_continue(repo: str):
+    """
+    Prepares the files and then continues the am merge. Drops the
+    `MODULE.bazel.lock` file and adds all changed files to git.
+    """
+
+    subprocess.check_call(
+        ['git', 'restore', 'MODULE.bazel.lock'],
+        cwd=repo,
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+    )
     subprocess.check_call(
         ['git', 'add', '.'],
         cwd=repo,
@@ -162,6 +173,10 @@ def git_am_continue(repo: str):
 
 
 def git_am_abort(repo: str):
+    """
+    Aborts an am merge and resets the git head.
+    """
+
     subprocess.check_call(
         ['git', 'am', '--abort'],
         cwd=repo,
