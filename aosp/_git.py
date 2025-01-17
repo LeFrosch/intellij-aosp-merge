@@ -138,6 +138,28 @@ def git_read_aosp_commit(repo: str, commit: str) -> str:
     return aosp_commit
 
 
+def git_branch_contains(repo: str, origin: str, branch: str, commit: str) -> bool:
+    """
+    Checks if a branch contains the specific commit.
+    """
+
+    result = subprocess.run(
+        [
+            'git',
+            'merge-base',
+            '--is-ancestor',
+            commit,
+            '%s/%s' % (origin, branch),
+        ],
+        cwd=repo,
+    )
+
+    if result.returncode not in [0, 1]:
+        log_error('git contains check failed: %d' % result.returncode)
+
+    return result.returncode == 0
+
+
 def git_list_files(repo: str, commit: str) -> list[str]:
     """
     Gets all files modified by this commit.
@@ -147,4 +169,11 @@ def git_list_files(repo: str, commit: str) -> list[str]:
         ['git', 'diff-tree', '--no-commit-id', '--name-only', commit, '-r'],
         cwd=repo,
     )
-    return output.decode().splitlines()
+
+    files = output.decode().splitlines()
+
+    # if the commit from the aosp brnach, the file paths need to be remapped
+    if not git_branch_contains(repo, AOSP_ORIGIN, AOSP_BRANCH, commit):
+        return files
+
+    return [file.removeprefix('aswb/') for file in files]
