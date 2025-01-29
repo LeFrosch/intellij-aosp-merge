@@ -33,7 +33,10 @@ Make sure to check out the right branch in the git repository where the commit s
 To review a commit, run the following command and specify the hash of the already applied commit:
 
 ```bash
-aosp review <hash>
+aosp review <hash> # where <hash> is hash in bazelbuild/intellij
+
+# effectively you might need to do 
+# git fetch origin pull/<id>/head && aosp review FETCH_HEAD
 ```
 
 The tool generates a diff between the patch applied to the git repository and the patch applied to the AOSP.
