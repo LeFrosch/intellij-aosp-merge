@@ -36,31 +36,21 @@ def configure(parser: argparse.ArgumentParser):
     )
 
 
-def show_diff_diff(repo: str, repo_diff: str, aosp_diff: str):
-    repo_file = tempfile.NamedTemporaryFile(mode='wt')
-    aosp_file = tempfile.NamedTemporaryFile(mode='wt')
-
+def show_diff_diff(repo: str, repo_commit: str, aosp_commit: str):
     try:
-        repo_file.write(repo_diff)
-        aosp_file.write(aosp_diff)
-
         subprocess.call(
             [
                 'git',
-                '--no-pager',
-                'diff',
-                '--no-index',
-                aosp_file.name,
-                repo_file.name,
+                'range-diff',
+                f'{aosp_commit}^..{aosp_commit}',
+                f'{repo_commit}^..{repo_commit}',
             ],
             cwd=repo,
             stderr=sys.stdout,
             stdout=sys.stdout,
         )
-
     finally:
-        repo_file.close()
-        aosp_file.close()
+        pass
 
 
 def execute(args: argparse.Namespace):
@@ -70,13 +60,7 @@ def execute(args: argparse.Namespace):
     repo_commit = git_log(repo, args.commit, '%H')
     aosp_commit = git_read_aosp_commit(repo, args.commit)
 
-    log('genreating repo diff for %s' % repo_commit)
-    repo_diff = str(generate_diff(repo, repo_commit))
-
-    log('genreating aosp diff for %s' % aosp_commit)
-    aosp_diff = aosp_process_diff(generate_diff(repo, aosp_commit))
-
     log('diff between applied patch and aosp patch')
-    show_diff_diff(repo, repo_diff, aosp_diff)
+    show_diff_diff(repo, repo_commit, aosp_commit)
 
     log('end of diff')
