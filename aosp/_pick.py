@@ -8,23 +8,13 @@ from ._git import (
     git_log,
     git_read_aosp_commit,
     git_list_files,
+    git_parse_rev,
 )
 
 from ._patch import execute as patch, configure as patch_configure
 from ._test import execute as test, configure as test_configure
 from ._consts import INTELLIJ_REF, AOSP_URL
 from ._util import log, log_error, choose, ask, first
-
-
-def git_get_head(repo: str) -> str:
-    """
-    Gets the hash of the git HEAD.
-    """
-
-    return subprocess.check_output(
-        ['git', 'rev-parse', 'HEAD'],
-        cwd=repo,
-    ).decode().strip()
 
 
 def git_branch(repo: str, src: str, name: str):
@@ -230,7 +220,7 @@ def execute(args: argparse.Namespace):
 
     git_setup_intellij(repo)
 
-    commit = git_get_head(repo)
+    commit = git_parse_rev(repo, 'HEAD')
     aosp_commit = git_read_aosp_commit(repo, commit)
 
     log('creating PR for aosp commit %s' % aosp_commit)

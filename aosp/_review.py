@@ -6,8 +6,24 @@ import sys
 from unidiff import PatchSet
 
 from ._patch import patch_process as aosp_process_diff
-from ._git import git_setup_aosp, git_log, git_read_aosp_commit
+from ._git import git_setup_aosp, git_log, git_read_aosp_commit, git_parse_rev
+from ._consts import INTELLIJ_ORIGIN
 from ._util import log
+
+
+def git_fetch_pr(repo: str, pr: str) -> str:
+    """
+    Fetches the head of the pull request from GitHub and resolves the commit
+    hash for the head.
+    """
+
+    subprocess.check_call(
+        ['git', 'fetch', INTELLIJ_ORIGIN, 'pull/%s/head' % pr],
+        cwd=repo,
+    )
+    log('pr %s up to date' % pr)
+
+    return git_parse_rev(repo, 'FETCH_HEAD')
 
 
 def generate_diff(repo: str, commit: str) -> PatchSet:
@@ -26,14 +42,6 @@ def generate_diff(repo: str, commit: str) -> PatchSet:
         file.patch_info = None
 
     return patch
-
-
-def configure(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        'commit',
-        type=str,
-        help='hash of the commit to review'
-    )
 
 
 def show_diff_diff(repo: str, repo_diff: str, aosp_diff: str):
@@ -63,12 +71,32 @@ def show_diff_diff(repo: str, repo_diff: str, aosp_diff: str):
         aosp_file.close()
 
 
+def configure(parser: argparse.ArgumentParser):
+    group = parser.add_mutually_exclusive_group(required=True)
+
+    group.add_argument(
+        '--commit',
+        type=str,
+        help='hash of the commit to review'
+    )
+    group.add_argument(
+        '--pr',
+        type=str,
+        help='number of the pull request to review'
+    )
+
+
 def execute(args: argparse.Namespace):
     repo = args.repo
     git_setup_aosp(repo)
 
-    repo_commit = git_log(repo, args.commit, '%H')
-    aosp_commit = git_read_aosp_commit(repo, args.commit)
+    if (args.pr):
+        commit = git_fetch_pr(repo, args.pr)
+    else:
+        commit = args.commit
+
+    repo_commit = git_log(repo, commit, '%H')
+    aosp_commit = git_read_aosp_commit(repo, commit)
 
     log('genreating repo diff for %s' % repo_commit)
     repo_diff = str(generate_diff(repo, repo_commit))

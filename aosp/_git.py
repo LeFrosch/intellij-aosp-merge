@@ -177,3 +177,14 @@ def git_list_files(repo: str, commit: str) -> list[str]:
         return files
 
     return [file.removeprefix('aswb/') for file in files]
+
+
+def git_parse_rev(repo: str, rev: str) -> str:
+    """
+    Gets the hash of a revision like HEAD.
+    """
+
+    return subprocess.check_output(
+        ['git', 'rev-parse', rev],
+        cwd=repo,
+    ).decode().strip()
