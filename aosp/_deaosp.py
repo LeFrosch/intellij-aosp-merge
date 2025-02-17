@@ -70,6 +70,10 @@ REPLACEMENTS = {
     '//:android.bzl': '@rules_android//rules:rules.bzl',
     '//tools/base/bazel:kotlin.bzl': '@rules_kotlin//kotlin:jvm.bzl',
 
+    # remap aswb_library
+    'load("//build_defs:build_defs.bzl", "aswb_library")': 'load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")',
+    'aswb_library(': 'kt_jvm_library(',
+
     # remap aosp paths
     **path('tools/adt/idea/aswb'),
     **path('tools/vendor/google3/aswb/third_party/intellij/bazel/plugin'),
