@@ -44,7 +44,13 @@ def generate_diff(repo: str, commit: str) -> PatchSet:
     return patch
 
 
-def show_diff_diff(repo: str, repo_diff: str, aosp_diff: str):
+def show_diff_diff(repo: str, repo_commit: str, aosp_commit: str):
+    log('genreating repo diff for %s' % repo_commit)
+    repo_diff = str(generate_diff(repo, repo_commit))
+
+    log('genreating aosp diff for %s' % aosp_commit)
+    aosp_diff = aosp_process_diff(generate_diff(repo, aosp_commit))
+
     repo_file = tempfile.NamedTemporaryFile(mode='wt')
     aosp_file = tempfile.NamedTemporaryFile(mode='wt')
 
@@ -55,7 +61,6 @@ def show_diff_diff(repo: str, repo_diff: str, aosp_diff: str):
         subprocess.call(
             [
                 'git',
-                '--no-pager',
                 'diff',
                 '--no-index',
                 aosp_file.name,
@@ -69,6 +74,20 @@ def show_diff_diff(repo: str, repo_diff: str, aosp_diff: str):
     finally:
         repo_file.close()
         aosp_file.close()
+
+
+def show_range_diff(repo: str, repo_commit: str, aosp_commit: str):
+    subprocess.call(
+        [
+            'git',
+            'range-diff',
+            '%s^..%s' % (aosp_commit, aosp_commit),
+            '%s^..%s' % (repo_commit, repo_commit),
+        ],
+        cwd=repo,
+        stderr=sys.stdout,
+        stdout=sys.stdout,
+    )
 
 
 def configure(parser: argparse.ArgumentParser):
@@ -85,12 +104,19 @@ def configure(parser: argparse.ArgumentParser):
         help='number of the pull request to review'
     )
 
+    parser.add_argument(
+        '--mode',
+        choices=['diff', 'range'],
+        help='review mode (diff or range)',
+        default='range',
+    )
+
 
 def execute(args: argparse.Namespace):
     repo = args.repo
     git_setup_aosp(repo)
 
-    if (args.pr):
+    if args.pr:
         commit = git_fetch_pr(repo, args.pr)
     else:
         commit = args.commit
@@ -98,13 +124,7 @@ def execute(args: argparse.Namespace):
     repo_commit = git_log(repo, commit, '%H')
     aosp_commit = git_read_aosp_commit(repo, commit)
 
-    log('genreating repo diff for %s' % repo_commit)
-    repo_diff = str(generate_diff(repo, repo_commit))
-
-    log('genreating aosp diff for %s' % aosp_commit)
-    aosp_diff = aosp_process_diff(generate_diff(repo, aosp_commit))
-
-    log('diff between applied patch and aosp patch')
-    show_diff_diff(repo, repo_diff, aosp_diff)
-
-    log('end of diff')
+    if args.mode == 'diff':
+        show_diff_diff(repo, repo_commit, aosp_commit)
+    else:
+        show_range_diff(repo, repo_commit, aosp_commit)
