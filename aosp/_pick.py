@@ -44,6 +44,26 @@ def git_branch(repo: str, src: str, name: str):
     )
 
 
+def git_has_changes(repo: str) -> bool:
+    """
+    Retruns true if there are uncommited changes.
+    """
+
+    output = subprocess.check_output(
+        ['git', 'status', '-s'],
+        cwd=repo,
+    )
+
+    for line in output.decode().splitlines():
+        # ignore the always changing lock file
+        if 'MODULE.bazel.lock' in line:
+            continue
+
+        return True
+
+    return False
+
+
 def git_cherry_pick(repo: str, commit: str) -> bool:
     """
     Runs a git cherry-pick.
@@ -217,6 +237,10 @@ def execute(args: argparse.Namespace):
 
     if not ask('create PR from commit'):
         return
+
+    while git_has_changes(repo):
+        if ask('there are uncommited changes, continue anyway?'):
+            break
 
     git_setup_intellij(repo)
 
