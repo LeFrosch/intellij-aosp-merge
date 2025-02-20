@@ -13,6 +13,7 @@ from ._git import (
 
 from ._patch import execute as patch, configure as patch_configure
 from ._test import execute as test, configure as test_configure
+from ._review import generate_stat
 from ._consts import INTELLIJ_REF, AOSP_URL
 from ._util import log, log_error, choose, ask, first
 
@@ -46,7 +47,7 @@ def git_branch(repo: str, src: str, name: str):
 
 def git_has_changes(repo: str) -> bool:
     """
-    Retruns true if there are uncommited changes.
+    Returns true if there are uncommitted changes.
     """
 
     output = subprocess.check_output(
@@ -156,11 +157,19 @@ def create_pr(repo: str, commit: str, aosp_commit: str, draft: bool):
     Uses the github cli to create a new PR.
     """
 
+    insertions, deletions = generate_stat(repo, commit, aosp_commit)
+    stat = 'STAT (diff to AOSP): %d insertions(+), %d deletion(-)' % (
+        insertions, deletions
+    )
+
+    log(stat)
+
     title = '[AOSP-pick] %s' % git_log(repo, aosp_commit, '%s')
-    body = 'Cherry pick AOSP commit [%s](%s%s).\n\n%s' % (
+    body = 'Cherry pick AOSP commit [%s](%s%s).\n\n%s\n\n%s' % (
         aosp_commit,
         AOSP_URL,
         aosp_commit,
+        stat,
         git_log(repo, commit, '%b'),
     )
 
