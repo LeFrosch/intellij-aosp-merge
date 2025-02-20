@@ -8,7 +8,7 @@ from unidiff import PatchSet
 from ._patch import patch_process as aosp_process_diff
 from ._git import git_setup_aosp, git_log, git_read_aosp_commit, git_parse_rev
 from ._consts import INTELLIJ_ORIGIN
-from ._util import log
+from ._util import log, log_error
 
 
 def git_fetch_pr(repo: str, pr: str) -> str:
@@ -41,10 +41,74 @@ def generate_diff(repo: str, commit: str) -> PatchSet:
     for file in patch:
         file.patch_info = None
 
+        for hunk in file:
+            hunk.source_start = 0
+            hunk.source_length = 0
+            hunk.target_start = 0
+            hunk.target_length = 0
+
     return patch
 
 
+def generate_stat(repo: str, repo_commit: str, aosp_commit: str) -> (int, int):
+    """
+    Similar to show_diff_diff but only calculates the different insertions and
+    deletions from the diff. Useful for a quick overview how many mnuall
+    changes have been made to a patch.
+    """
+
+    repo_diff = str(generate_diff(repo, repo_commit))
+    aosp_diff = aosp_process_diff(generate_diff(repo, aosp_commit))
+
+    repo_file = tempfile.NamedTemporaryFile(mode='wt')
+    aosp_file = tempfile.NamedTemporaryFile(mode='wt')
+
+    try:
+        repo_file.write(repo_diff)
+        aosp_file.write(aosp_diff)
+
+        result = subprocess.run(
+            [
+                'git',
+                'diff',
+                '--numstat',
+                '--no-index',
+                aosp_file.name,
+                repo_file.name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo,
+        )
+
+        # diff returns 0 when there are no changes
+        if result.returncode == 0:
+            return (0, 0)
+
+        # diff returns 1 when there are changes
+        if result.returncode != 1:
+            return None
+
+        diff = result.stdout.splitlines()
+        if len(diff) == 0:
+            return None
+
+        insertions, deletions = diff[0].split('\t')[0:2]
+        return (int(insertions), int(deletions))
+
+    finally:
+        repo_file.close()
+        aosp_file.close()
+
+
 def show_diff_diff(repo: str, repo_commit: str, aosp_commit: str):
+    """
+    Creates a diff from the changes applied to our repository and the changes
+    applied to the AOSP repository. Adjusts the diffs to reduce the noise,
+    stripping filenames and line numbers.
+    """
+
     log('genreating repo diff for %s' % repo_commit)
     repo_diff = str(generate_diff(repo, repo_commit))
 
@@ -77,6 +141,11 @@ def show_diff_diff(repo: str, repo_commit: str, aosp_commit: str):
 
 
 def show_range_diff(repo: str, repo_commit: str, aosp_commit: str):
+    """
+    Uses git range diff to compar the changes between our repository and the
+    AOSP repository. Should be considered the default for reviewing patches.
+    """
+
     subprocess.call(
         [
             'git',
@@ -106,8 +175,8 @@ def configure(parser: argparse.ArgumentParser):
 
     parser.add_argument(
         '--mode',
-        choices=['diff', 'range'],
-        help='review mode (diff or range)',
+        choices=['diff', 'range', 'stat'],
+        help='review mode (diff, range, stat)',
         default='range',
     )
 
@@ -122,9 +191,16 @@ def execute(args: argparse.Namespace):
         commit = args.commit
 
     repo_commit = git_log(repo, commit, '%H')
+    log('reviewing: %s' % git_log(repo, repo_commit, '%s'))
+
     aosp_commit = git_read_aosp_commit(repo, commit)
 
     if args.mode == 'diff':
         show_diff_diff(repo, repo_commit, aosp_commit)
-    else:
+    elif args.mode == 'range':
         show_range_diff(repo, repo_commit, aosp_commit)
+    elif args.mode == 'stat':
+        insertions, deletions = generate_stat(repo, repo_commit, aosp_commit)
+        log('STAT: %d insertions(+), %d deletion(-)' % (insertions, deletions))
+    else:
+        log_error('unknonw diff mode: %s' % args.mode)
