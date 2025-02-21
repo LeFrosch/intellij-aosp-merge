@@ -5,8 +5,15 @@ import sys
 
 from unidiff import PatchSet
 
+from ._git import (
+    git_setup_aosp,
+    git_setup_intellij,
+    git_log,
+    git_read_aosp_commit,
+    git_parse_rev,
+)
+
 from ._patch import patch_process as aosp_process_diff
-from ._git import git_setup_aosp, git_log, git_read_aosp_commit, git_parse_rev
 from ._consts import INTELLIJ_ORIGIN
 from ._util import log, log_error
 
@@ -65,7 +72,9 @@ def generate_stat(repo: str, repo_commit: str, aosp_commit: str) -> (int, int):
 
     try:
         repo_file.write(repo_diff)
+        repo_file.flush()
         aosp_file.write(aosp_diff)
+        aosp_file.flush()
 
         result = subprocess.run(
             [
@@ -79,7 +88,6 @@ def generate_stat(repo: str, repo_commit: str, aosp_commit: str) -> (int, int):
             capture_output=True,
             text=True,
             check=False,
-            cwd=repo,
         )
 
         # diff returns 0 when there are no changes
@@ -109,10 +117,7 @@ def show_diff_diff(repo: str, repo_commit: str, aosp_commit: str):
     stripping filenames and line numbers.
     """
 
-    log('genreating repo diff for %s' % repo_commit)
     repo_diff = str(generate_diff(repo, repo_commit))
-
-    log('genreating aosp diff for %s' % aosp_commit)
     aosp_diff = aosp_process_diff(generate_diff(repo, aosp_commit))
 
     repo_file = tempfile.NamedTemporaryFile(mode='wt')
@@ -120,7 +125,9 @@ def show_diff_diff(repo: str, repo_commit: str, aosp_commit: str):
 
     try:
         repo_file.write(repo_diff)
+        repo_file.flush()
         aosp_file.write(aosp_diff)
+        aosp_file.flush()
 
         subprocess.call(
             [
@@ -130,7 +137,6 @@ def show_diff_diff(repo: str, repo_commit: str, aosp_commit: str):
                 aosp_file.name,
                 repo_file.name,
             ],
-            cwd=repo,
             stderr=sys.stdout,
             stdout=sys.stdout,
         )
@@ -150,6 +156,7 @@ def show_range_diff(repo: str, repo_commit: str, aosp_commit: str):
         [
             'git',
             'range-diff',
+            '-b',
             '%s^..%s' % (aosp_commit, aosp_commit),
             '%s^..%s' % (repo_commit, repo_commit),
         ],
@@ -184,6 +191,7 @@ def configure(parser: argparse.ArgumentParser):
 def execute(args: argparse.Namespace):
     repo = args.repo
     git_setup_aosp(repo)
+    git_setup_intellij(repo)
 
     if args.pr:
         commit = git_fetch_pr(repo, args.pr)
