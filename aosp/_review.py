@@ -39,7 +39,7 @@ def generate_diff(repo: str, commit: str) -> PatchSet:
     """
 
     output = subprocess.check_output(
-        ['git', 'diff', '-p', commit + '~1', commit],
+        ['git', 'diff', '-U0', '-p', commit + '~1', commit],
         cwd=repo,
     )
 
