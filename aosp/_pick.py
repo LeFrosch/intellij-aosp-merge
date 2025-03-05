@@ -13,7 +13,7 @@ from ._git import (
 
 from ._patch import execute as patch, configure as patch_configure
 from ._test import execute as test, configure as test_configure
-from ._review import generate_stat
+from ._review import generate_stat, show_diff_diff, show_range_diff
 from ._consts import INTELLIJ_REF, AOSP_URL
 from ._util import log, log_error, choose, ask, first
 
@@ -162,8 +162,6 @@ def create_pr(repo: str, commit: str, aosp_commit: str, draft: bool):
         insertions, deletions
     )
 
-    log(stat)
-
     title = '[AOSP-pick] %s' % git_log(repo, aosp_commit, '%s')
     body = 'Cherry pick AOSP commit [%s](%s%s).\n\n%s\n\n%s' % (
         aosp_commit,
@@ -244,17 +242,36 @@ def execute(args: argparse.Namespace):
     if not args.notest:
         test(args)
 
-    if not ask('create PR from commit'):
-        return
-
-    while git_has_changes(repo):
-        if ask('there are uncommited changes, continue anyway?'):
-            break
-
     git_setup_intellij(repo)
 
     commit = git_parse_rev(repo, 'HEAD')
     aosp_commit = git_read_aosp_commit(repo, commit)
+
+    while True:
+        insertions, deletions = generate_stat(repo, commit, aosp_commit)
+
+        result = choose(
+            title='how to continue (%d (+), %d (-))' % (insertions, deletions),
+            options=[
+                '[c] create PR from commit, continue',
+                '[r] review, range',
+                '[d] review, diff',
+                '[a] abort',
+            ],
+        )
+
+        if result == 'c':
+            break
+        if result == 'r':
+            show_range_diff(repo, commit, aosp_commit)
+        if result == 'd':
+            show_diff_diff(repo, commit, aosp_commit)
+        if result == 'a':
+            return
+
+    while git_has_changes(repo):
+        if ask('there are uncommitted changes, continue anyway?'):
+            break
 
     log('creating PR for aosp commit %s' % aosp_commit)
 
