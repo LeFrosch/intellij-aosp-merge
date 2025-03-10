@@ -244,10 +244,10 @@ def execute(args: argparse.Namespace):
 
     git_setup_intellij(repo)
 
-    commit = git_parse_rev(repo, 'HEAD')
-    aosp_commit = git_read_aosp_commit(repo, commit)
-
     while True:
+        commit = git_parse_rev(repo, 'HEAD')
+        aosp_commit = git_read_aosp_commit(repo, commit)
+
         insertions, deletions = generate_stat(repo, commit, aosp_commit)
 
         result = choose(
@@ -272,6 +272,9 @@ def execute(args: argparse.Namespace):
     while git_has_changes(repo):
         if ask('there are uncommitted changes, continue anyway?'):
             break
+
+    commit = git_parse_rev(repo, 'HEAD')
+    aosp_commit = git_read_aosp_commit(repo, commit)
 
     log('creating PR for aosp commit %s' % aosp_commit)
 
