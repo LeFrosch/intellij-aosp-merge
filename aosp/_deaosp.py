@@ -16,6 +16,18 @@ def repo(label):
     }
 
 
+def google(label):
+    """
+    Reference to google internal repository, we don't have access to this
+    anyway. Creates two replacements, one for trailing `/` and one for `:`.
+    """
+
+    return {
+        f'{label}/': '//third_party/google/',
+        f'{label}:': '//third_party/google:',
+    }
+
+
 def path(value):
     """
     Creates two replacements for a path. One for trailing `/` and without.
@@ -31,9 +43,9 @@ REPLACEMENTS = {
     # remap aosp relative labels
     **repo('//tools/adt/idea/aswb'),
     **repo('//tools/vendor/google/aswb'),
-    **repo('//tools/vendor/google3/aswb'),
     **repo('//third_party/intellij/bazel/plugin'),
     **repo('//third_party/intellij/plugin'),
+    **google('//tools/vendor/google3'),
     '//third_party/java/auto_value': '//third_party/java/auto_value',
     '//third_party/java/auto:auto_value': '//third_party/java/auto_value',
     '//third_party/java/jetbrains:build_defs.bzl': '//intellij_platform_sdk:build_defs.bzl',
