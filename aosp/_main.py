@@ -8,6 +8,7 @@ from . import (
     _review as review,
     _test as test,
     _pick as pick,
+    _reset as reset,
 )
 
 from .__about__ import __version__, __description__
@@ -80,6 +81,13 @@ def parse_arguments() -> argparse.Namespace:
     )
     pick_parser.set_defaults(execute=pick.execute)
     pick.configure(pick_parser)
+
+    reset_parser = commands.add_parser(
+        'reset',
+        help='utility to reset the target repository',
+    )
+    reset_parser.set_defaults(execute=reset.execute)
+    reset.configure(reset_parser)
 
     return parser.parse_args()
 
