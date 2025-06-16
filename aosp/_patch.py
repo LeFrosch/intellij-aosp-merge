@@ -67,8 +67,14 @@ def patch_process_file(file: PatchedFile) -> str | None:
     source_aswb = file.source_file.startswith('a/aswb')
     target_aswb = file.target_file.startswith('b/aswb')
 
+    # drop changes that only apply aswb
+    source_aswb_only = file.source_file.startswith('a/aswb/aswb')
+    target_aswb_only = file.target_file.startswith('b/aswb/aswb')
+
     # for newly add files source is /dev/null and visversa for removed files
     if (not source_aswb and not target_aswb):
+        return None
+    if (source_aswb_only or target_aswb_only):
         return None
 
     # strip the aswb subfolder
