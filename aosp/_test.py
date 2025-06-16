@@ -1,38 +1,79 @@
 import sys
 import subprocess
 import argparse
+import dataclasses
 
 from ._util import log, choose, exit
 
+
+@dataclasses.dataclass
+class Case:
+    target: str
+    product: str
+    flags: list[str] = dataclasses.field(default_factory=list)
+
+
 TEST_CASES = [
-    ('//:clwb_tests', 'clion-oss-latest-stable'),
-    ('//:ijwb_ue_tests', 'intellij-ue-oss-latest-stable'),
-    ('//querysync/...', 'intellij-ue-oss-latest-stable'),
+    Case(
+        target='//clwb:unit_tests',
+        product='clion-oss-latest-stable',
+    ),
+    Case(
+        target='//clwb:headless_tests',
+        product='clion-oss-latest-stable',
+        flags=['--test_tag_filters=bit_bazel_8_2_1'],
+    ),
+    Case(
+        target='//:ijwb_ue_tests',
+        product='intellij-ue-oss-latest-stable',
+    ),
+    Case(
+        target='//querysync/...',
+        product='intellij-ue-oss-latest-stable',
+    ),
 ]
 
 
 BUILD_CASES = [
-    ('//clwb:clwb_bazel_zip', 'clion-oss-latest-stable'),
-    ('//ijwb:ijwb_bazel_zip', 'intellij-ue-oss-latest-stable'),
-    ('//querysync', 'intellij-ue-oss-latest-stable'),
+    Case(
+        target='//clwb:clwb_bazel_zip',
+        product='clion-oss-latest-stable',
+    ),
+    Case(
+        target='//:clwb_tests',
+        product='clion-oss-latest-stable',
+    ),
+    Case(
+        target='//ijwb:ijwb_bazel_zip',
+        product='intellij-ue-oss-latest-stable',
+    ),
+    Case(
+        target='//:ijwb_ue_tests',
+        product='intellij-ue-oss-latest-stable',
+    ),
+    Case(
+        target='//querysync',
+        product='intellij-ue-oss-latest-stable',
+    ),
 ]
 
 
-def bazel_test(repo: str, target: str, ij_product: str):
+def bazel_test(repo: str, case: Case):
     """
     Runs a bazel test command for the given target and ij_product.
     """
 
     while True:
-        log('executing test %s' % target)
+        log('executing test %s' % case.target)
 
         success = subprocess.run(
             [
                 'bazel',
                 'test',
-                target,
-                '--define=ij_product=%s' % ij_product,
+                case.target,
+                '--define=ij_product=%s' % case.product,
                 '--disk_cache=/tmp/bazel_cache',
+                *case.flags,
             ],
             cwd=repo,
             stderr=sys.stdout,
@@ -40,11 +81,11 @@ def bazel_test(repo: str, target: str, ij_product: str):
         ).returncode == 0
 
         if success:
-            log('test %s passed' % target)
+            log('test %s passed' % case.target)
             break
 
         result = choose(
-            title='test %s failed, press enter to retry' % target,
+            title='test %s failed, press enter to retry' % case.target,
             options=[
                 '[r] retry',
                 '[a] abort',
@@ -55,17 +96,18 @@ def bazel_test(repo: str, target: str, ij_product: str):
             exit("test aborted")
 
 
-def bazel_build(repo: str, target: str, ij_product: str):
+def bazel_build(repo: str, case: Case):
     while True:
-        log('executing build %s' % target)
+        log('executing build %s' % case.target)
 
         success = subprocess.run(
             [
                 'bazel',
                 'build',
-                target,
-                '--define=ij_product=%s' % ij_product,
+                case.target,
+                '--define=ij_product=%s' % case.product,
                 '--disk_cache=/tmp/bazel_cache',
+                *case.flags,
             ],
             cwd=repo,
             stderr=sys.stdout,
@@ -73,11 +115,11 @@ def bazel_build(repo: str, target: str, ij_product: str):
         ).returncode == 0
 
         if success:
-            log('build %s passed' % target)
+            log('build %s passed' % case.target)
             break
 
         result = choose(
-            title='build %s failed, press enter to retry' % target,
+            title='build %s failed, press enter to retry' % case.target,
             options=[
                 '[r] retry',
                 '[a] abort',
@@ -99,11 +141,11 @@ def configure(parser: argparse.ArgumentParser):
 
 def execute(args: argparse.Namespace):
     if (args.buildonly):
-        for (target, product) in BUILD_CASES:
-            bazel_build(args.repo, target, product)
+        for case in BUILD_CASES:
+            bazel_build(args.repo, case)
         log('all builds passed')
 
     else:
-        for (target, product) in TEST_CASES:
-            bazel_test(args.repo, target, product)
+        for case in TEST_CASES:
+            bazel_test(args.repo, case)
         log('all tests passed')
