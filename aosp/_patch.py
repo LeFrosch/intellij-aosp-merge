@@ -18,7 +18,12 @@ from ._util import log, log_error, filter_none, choose
 MAGIC_DATE = 'From %s Mon Sep 17 00:00:00 2001'
 AUTHOR = 'Googler <intellij-github@google.com>'
 
-repo = '/Volumes/Projects/bazel/intellij'
+IGNORED_DIRECTORIES = [
+    'aswb',
+    'ijwb',
+    'java',
+    'kotlin',
+]
 
 
 def patch_generate_diff(repo: str, commit: str) -> PatchSet:
@@ -54,6 +59,23 @@ def patch_process_info(info: list[str]):
         info[i] = process(info[i])
 
 
+def patch_should_ignore_file(file: PatchedFile) -> bool:
+    """
+    Checks if the changes to this file should be ignored. All files from
+    IGNORED_DIRECTORIES will be ignored.
+    """
+    for dir in IGNORED_DIRECTORIES:
+        source_ignored = file.source_file.startswith(f'a/aswb/{dir}')
+        target_ignored = file.target_file.startswith(f'b/aswb/{dir}')
+
+        # for newly add files source is /dev/null and visversa for removed
+        # files
+        if (source_ignored or target_ignored):
+            return True
+
+    return False
+
+
 def patch_process_file(file: PatchedFile) -> str | None:
     """
     Processes a patched file. Returns either the diff for the file or none if
@@ -67,14 +89,10 @@ def patch_process_file(file: PatchedFile) -> str | None:
     source_aswb = file.source_file.startswith('a/aswb')
     target_aswb = file.target_file.startswith('b/aswb')
 
-    # drop changes that only apply aswb
-    source_aswb_only = file.source_file.startswith('a/aswb/aswb')
-    target_aswb_only = file.target_file.startswith('b/aswb/aswb')
-
     # for newly add files source is /dev/null and visversa for removed files
     if (not source_aswb and not target_aswb):
         return None
-    if (source_aswb_only or target_aswb_only):
+    if (patch_should_ignore_file(file)):
         return None
 
     # strip the aswb subfolder
