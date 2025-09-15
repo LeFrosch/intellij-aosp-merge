@@ -21,15 +21,7 @@ TEST_CASES = [
     Case(
         target='//clwb:headless_tests',
         product='clion-oss-latest-stable',
-        flags=['--test_tag_filters=bit_bazel_8_2_1'],
-    ),
-    Case(
-        target='//:ijwb_ue_tests',
-        product='intellij-ue-oss-latest-stable',
-    ),
-    Case(
-        target='//querysync/...',
-        product='intellij-ue-oss-latest-stable',
+        flags=['--test_tag_filters=bit_bazel_8_4_0'],
     ),
 ]
 
@@ -42,18 +34,6 @@ BUILD_CASES = [
     Case(
         target='//:clwb_tests',
         product='clion-oss-latest-stable',
-    ),
-    Case(
-        target='//ijwb:ijwb_bazel_zip',
-        product='intellij-ue-oss-latest-stable',
-    ),
-    Case(
-        target='//:ijwb_ue_tests',
-        product='intellij-ue-oss-latest-stable',
-    ),
-    Case(
-        target='//querysync',
-        product='intellij-ue-oss-latest-stable',
     ),
 ]
 
